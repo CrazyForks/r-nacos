@@ -111,6 +111,7 @@ pub struct ConfigValue {
     pub(crate) histories: Vec<HistoryItem>,
     pub(crate) config_type: Option<Arc<String>>,
     pub(crate) desc: Option<Arc<String>>,
+    pub(crate) last_modified: i64,
 }
 
 impl ConfigValue {
@@ -123,6 +124,7 @@ impl ConfigValue {
             histories: vec![],
             config_type: None,
             desc: None,
+            last_modified: now_millis_i64(),
         }
     }
 
@@ -150,6 +152,7 @@ impl ConfigValue {
             }],
             config_type: None,
             desc: None,
+            last_modified: op_time,
         }
     }
 
@@ -178,6 +181,7 @@ impl ConfigValue {
         if self.histories.len() >= 100 {
             self.histories.remove(0);
         }
+        self.last_modified = op_time;
         self.histories.push(item);
     }
 }
@@ -296,7 +300,7 @@ pub enum ListenerResult {
 type ListenerSenderType = tokio::sync::oneshot::Sender<ListenerResult>;
 //type ListenerReceiverType = tokio::sync::oneshot::Receiver<ListenerResult>;
 
-struct ConfigListener {
+pub(crate) struct ConfigListener {
     version: u64,
     listener: HashMap<ConfigKey, Vec<u64>>,
     time_listener: BTreeMap<i64, Vec<OnceListener>>,
@@ -372,14 +376,22 @@ impl ConfigListener {
             self.time_listener.remove(&key);
         }
     }
+
+    pub(crate) fn get_listener_client_size(&self) -> usize {
+        self.sender_map.len()
+    }
+
+    pub(crate) fn get_listener_key_size(&self) -> usize {
+        self.listener.len()
+    }
 }
 
 #[bean(inject)]
 pub struct ConfigActor {
-    cache: HashMap<ConfigKey, ConfigValue>,
-    listener: ConfigListener,
-    subscriber: Subscriber,
-    tenant_index: TenantIndex,
+    pub(crate) cache: HashMap<ConfigKey, ConfigValue>,
+    pub(crate) listener: ConfigListener,
+    pub(crate) subscriber: Subscriber,
+    pub(crate) tenant_index: TenantIndex,
     raft: Option<Weak<NacosRaft>>,
     sequence: SimpleSequence,
 }
@@ -667,6 +679,7 @@ pub enum ConfigResult {
         md5: Arc<String>,
         config_type: Option<Arc<String>>,
         desc: Option<Arc<String>>,
+        last_modified: i64,
     },
     NULL,
     ChangeKey(Vec<ConfigKey>),
@@ -710,6 +723,7 @@ impl Handler<ConfigCmd> for ConfigActor {
                         md5: v.md5.clone(),
                         config_type: v.config_type.clone(),
                         desc: v.desc.clone(),
+                        last_modified: v.last_modified,
                     });
                 }
             }

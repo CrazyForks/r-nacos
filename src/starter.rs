@@ -2,6 +2,7 @@ use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use crate::common::actor_utils::{create_actor_at_thread, create_actor_at_thread2};
 use crate::grpc::handler::RAFT_ROUTE_REQUEST;
+use crate::metrics::core::MetricsManager;
 use crate::raft::filestore::core::FileStore;
 use crate::raft::filestore::raftapply::StateApplyManager;
 use crate::raft::filestore::raftdata::RaftDataWrap;
@@ -179,6 +180,8 @@ pub async fn config_factory(sys_config: Arc<AppSysConfig>) -> anyhow::Result<Fac
         //cache: cache_manager.clone(),
     });
     factory.register(BeanDefinition::from_obj(raft_data_wrap));
+    let metrics_manager = MetricsManager::new().start();
+    factory.register(BeanDefinition::actor_with_inject_from_obj(metrics_manager));
 
     Ok(factory.init().await)
 }
@@ -208,6 +211,7 @@ pub fn build_share_data(factory_data: FactoryData) -> anyhow::Result<Arc<AppShar
         raft_cache_route: factory_data.get_bean().unwrap(),
         user_manager: factory_data.get_actor().unwrap(),
         cache_manager: factory_data.get_actor().unwrap(),
+        metrics_manager: factory_data.get_actor().unwrap(),
         factory_data,
         timezone_offset: Arc::new(timezone_offset),
     });
